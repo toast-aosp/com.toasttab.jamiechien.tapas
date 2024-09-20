@@ -1,0 +1,103 @@
+#!/bin/bash
+
+
+TOOL_VERSION="1.0.2"
+
+while getopts ":s:h" opt; do
+  case $opt in
+    s)
+      SERIAL="$OPTARG"
+      ;;
+    h)
+      echo "Usage: $0 [-s serial_number] [-h]"
+      echo "Options:"
+      echo "  -s <serial_number>   Specify the serial number of the device."
+      echo "  -h                   Display this help message."
+      exit 0
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [ "$SERIAL" ]; then
+    ADB="adb -s $SERIAL"
+else
+    ADB="adb"
+fi
+
+fn_waitBootCompleted() {
+    while [[ $($ADB shell getprop sys.boot_completed) != 1 ]]; do
+        echo "Waiting device boot_completed..."
+        sleep 20
+    done
+}
+
+echo "******************************"
+echo "*  0. Check device root      *"
+echo "******************************"
+$ADB wait-for-device
+ROOT_CHECK=$($ADB shell getprop ro.build.fingerprint | grep userdebug | wc -l)
+if [ $ROOT_CHECK -eq 0 ]; then
+    echo "[ERROR] Device-$SERIAL unable to root."
+    exit 1
+fi
+$ADB root
+$ADB wait-for-device
+$ADB disable-verity
+$ADB wait-for-device
+$ADB reboot
+$ADB wait-for-device
+fn_waitBootCompleted
+
+echo
+echo "******************************"
+echo "*  1. Writing properties...  *"
+echo "******************************"
+$ADB root
+$ADB wait-for-device
+$ADB remount
+$ADB wait-for-device
+$ADB shell touch /vendor/check_writable
+if [ "$?" != "0" ]; then
+    echo "[ERROR] Write property fail."
+    exit 1
+else
+    $ADB shell rm /vendor/check_writable
+fi
+$ADB shell "echo \"service.adb.tls.port=5555\" >> /vendor/build.prop"
+$ADB shell "echo \"service.adb.tcp.port=5555\" >> /vendor/build.prop"
+$ADB shell "echo \"persist.adb.tls_server.enable=1\" >> /vendor/build.prop"
+$ADB reboot
+$ADB wait-for-device
+fn_waitBootCompleted
+
+echo
+echo "******************************"
+echo "*  2. Check properties...    *"
+echo "******************************"
+$ADB root
+$ADB wait-for-device
+a=$($ADB shell "grep \"service.adb.tls.port=5555\" /vendor/build.prop" | wc -l)
+b=$($ADB shell "grep \"service.adb.tcp.port=5555\" /vendor/build.prop" | wc -l)
+c=$($ADB shell "grep \"persist.adb.tls_server.enable=1\" /vendor/build.prop" | wc -l)
+if [[ $(($a+$b+$c)) -ge 3 ]]; then
+    echo "Pass"
+    echo
+    echo "Now you can disconnect the usb cable!"
+else
+    echo "Write property fail, please check the device is able to remount."
+    echo
+    exit 1
+fi
+
+echo
+echo "******************************"
+echo "*  Finished                  *"
+echo "******************************"
