@@ -1,4 +1,4 @@
-# small-automation-tools/tp-probe-fail
+# tapas/tp-probe-fail
 
 ## Tool Description
 TG3 is found an issue of the touch panel no response after device reboots.

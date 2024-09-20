@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-TOOL_VERSION="1.0.1"
+TOOL_VERSION="1.0.2"
 KEYWORD=("ILITEK Driver probe failed" "i2c_geni a94000.i2c: GSI QC err")
 CURR=`pwd`
 
@@ -55,6 +55,7 @@ while [ $error_cnt -eq 0 ]; do
     done
     run=$(($run+1))
     if [ $(($run%100)) -eq 0 ]; then
+        adb $TARGET shell rm /bugreports/bugreport-*.*
         rm bugreport-*.zip
         rm bugreport-*.txt
     fi
